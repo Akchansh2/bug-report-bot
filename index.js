@@ -73,11 +73,17 @@ app.post('/report', async (req, res) => {
 
     // DM the reporter
     const guild = channel.guild;
-    await guild.members.fetch();
-    const member = guild.members.cache.find(
-      m => m.user.username.toLowerCase() === discord_username.toLowerCase()
-        || m.user.tag.toLowerCase() === discord_username.toLowerCase()
-    );
+    let member = null;
+    try {
+      const results = await guild.members.fetch({ query: discord_username.split('#')[0], limit: 10 });
+      member = results.find(
+        m => m.user.username.toLowerCase() === discord_username.toLowerCase()
+          || m.user.tag.toLowerCase() === discord_username.toLowerCase()
+          || m.displayName.toLowerCase() === discord_username.toLowerCase()
+      ) || null;
+    } catch (e) {
+      console.log(`Member fetch failed: ${e.message}`);
+    }
 
     if (member) {
       const dm = new EmbedBuilder()
