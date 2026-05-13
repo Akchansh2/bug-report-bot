@@ -2,10 +2,10 @@ const express = require('express');
 const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const BOT_TOKEN      = process.env.BOT_TOKEN;
-const CHANNEL_ID     = process.env.CHANNEL_ID;
-const PORT           = process.env.PORT || 3000;
-const API_SECRET     = process.env.API_SECRET; // optional shared secret for security
+const BOT_TOKEN  = process.env.BOT_TOKEN;
+const CHANNEL_ID = process.env.CHANNEL_ID;
+const PORT       = process.env.PORT || 3000;
+const API_SECRET = process.env.API_SECRET;
 
 // ── Discord client ────────────────────────────────────────────────────────────
 const client = new Client({
@@ -24,16 +24,24 @@ client.once('ready', () => {
 const PRIORITY_COLOR = { Low: 0x23a55a, Medium: 0xf0b132, High: 0xf23f42 };
 const PRIORITY_DOT   = { Low: '🟢', Medium: '🟡', High: '🔴' };
 
-// ── Express server ────────────────────────────────────────────────────────────
+// ── Express ───────────────────────────────────────────────────────────────────
 const app = express();
 app.use(express.json());
 
-// Health check — Render pings this to keep the service alive
+// ── CORS — allow GitHub Pages and any browser to call this ───────────────────
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-api-secret');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
+
+// Health check
 app.get('/', (req, res) => res.send('Bug bot is running.'));
 
-// POST /report — called by your bug portal's script.js
+// POST /report
 app.post('/report', async (req, res) => {
-  // Optional API secret check
   if (API_SECRET && req.headers['x-api-secret'] !== API_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
@@ -47,15 +55,15 @@ app.post('/report', async (req, res) => {
   try {
     const channel = await client.channels.fetch(CHANNEL_ID);
 
-    // ── Channel embed ─────────────────────────────────────────────────────────
+    // Channel embed
     const embed = new EmbedBuilder()
       .setTitle(`${PRIORITY_DOT[priority] ?? '⚪'} New Bug Report — ${category}`)
       .setColor(PRIORITY_COLOR[priority] ?? 0x99aab5)
       .addFields(
-        { name: 'Reported by',  value: discord_username, inline: true },
-        { name: 'Priority',     value: priority,          inline: true },
-        { name: 'Category',     value: category,          inline: true },
-        { name: 'Description',  value: description.slice(0, 1024) },
+        { name: 'Reported by', value: discord_username, inline: true },
+        { name: 'Priority',    value: priority,          inline: true },
+        { name: 'Category',    value: category,          inline: true },
+        { name: 'Description', value: description.slice(0, 1024) },
         ...(steps ? [{ name: 'Steps to Reproduce', value: steps.slice(0, 1024) }] : []),
       )
       .setFooter({ text: 'Bug Reporting Portal' })
@@ -63,10 +71,9 @@ app.post('/report', async (req, res) => {
 
     await channel.send({ embeds: [embed] });
 
-    // ── DM confirmation ───────────────────────────────────────────────────────
-    // Look up the user by username in the guild
+    // DM the reporter
     const guild = channel.guild;
-    await guild.members.fetch(); // cache all members
+    await guild.members.fetch();
     const member = guild.members.cache.find(
       m => m.user.username.toLowerCase() === discord_username.toLowerCase()
         || m.user.tag.toLowerCase() === discord_username.toLowerCase()
@@ -78,7 +85,7 @@ app.post('/report', async (req, res) => {
         .setColor(0x23a55a)
         .setDescription(`Hey **${member.user.username}**, thanks for the report! We've logged it and will look into it shortly.`)
         .addFields(
-          { name: 'Category', value: category,  inline: true },
+          { name: 'Category', value: category, inline: true },
           { name: 'Priority', value: `${PRIORITY_DOT[priority] ?? ''} ${priority}`, inline: true },
         )
         .setFooter({ text: 'Bug Reporting Portal' })
